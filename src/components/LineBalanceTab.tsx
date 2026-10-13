@@ -41,6 +41,23 @@ export const LineBalanceTab: React.FC<LineBalanceTabProps> = ({
     ...style.operations.map((op) => op.smv / Math.max(1, op.operatorAssigned))
   );
 
+  const handleOperatorChange = (opId: string, delta: number) => {
+    trigger('tap');
+    const updatedOps = style.operations.map((op) => {
+      if (op.id === opId) {
+        return {
+          ...op,
+          operatorAssigned: Math.max(1, op.operatorAssigned + delta),
+        };
+      }
+      return op;
+    });
+    onUpdateStyle({
+      ...style,
+      operations: updatedOps,
+    });
+  };
+
   return (
     <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 pb-24">
       
@@ -118,7 +135,7 @@ export const LineBalanceTab: React.FC<LineBalanceTabProps> = ({
         </div>
 
         <p className="text-[10px] text-slate-400 mb-4">
-          Red line is Pitch Benchmark. Bars crossing above pitch line indicate production bottleneck stations.
+          Red line is Pitch Benchmark. Bars crossing above pitch line indicate production bottleneck stations. Adjust operators directly using +/- steppers.
         </p>
 
         {/* Diagram Area */}
@@ -131,13 +148,36 @@ export const LineBalanceTab: React.FC<LineBalanceTabProps> = ({
 
             return (
               <div key={op.id} className="space-y-1">
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="font-medium text-slate-300 truncate max-w-[200px]">
+                <div className="flex items-center justify-between text-[11px] gap-2">
+                  <span className="font-medium text-slate-300 truncate max-w-[170px] sm:max-w-[240px]">
                     {op.seq}. {op.name}
                   </span>
-                  <span className="font-mono text-[10px] text-slate-400">
-                    {stationTime.toFixed(2)}m ({op.operatorAssigned} op)
-                  </span>
+                  
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="font-mono text-[10px] text-slate-400">
+                      {stationTime.toFixed(2)}m
+                    </span>
+                    <div className="flex items-center bg-slate-950 border border-slate-800 rounded-lg px-1 py-0.5">
+                      <button
+                        type="button"
+                        onClick={() => handleOperatorChange(op.id, -1)}
+                        disabled={op.operatorAssigned <= 1}
+                        className="text-slate-400 hover:text-white px-1 font-bold text-xs disabled:opacity-30"
+                      >
+                        -
+                      </button>
+                      <span className="text-[10px] font-mono font-bold text-blue-400 px-1">
+                        {op.operatorAssigned} op
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleOperatorChange(op.id, 1)}
+                        className="text-slate-400 hover:text-white px-1 font-bold text-xs"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="relative h-4 bg-slate-950 rounded-md overflow-hidden flex items-center">

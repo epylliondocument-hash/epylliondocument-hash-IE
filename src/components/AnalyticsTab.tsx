@@ -147,17 +147,60 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
       <div className="bg-slate-900 rounded-2xl p-4 border border-slate-800 shadow-md">
         <h3 className="text-xs font-bold text-slate-200 mb-3 flex items-center gap-1.5">
           <Users className="w-4 h-4 text-blue-400" />
-          <span>Line Setup Parameters</span>
+          <span>Garment Order &amp; Line Parameters</span>
         </h3>
 
         <div className="space-y-2.5 text-xs">
+          {/* Style Header Details (Editable) */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[10px] text-slate-400 block mb-1">Style Name</label>
+              <input
+                type="text"
+                value={style.styleName}
+                onChange={(e) => handleFieldChange('styleName', e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-slate-100"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-slate-400 block mb-1">Style Code / PO</label>
+              <input
+                type="text"
+                value={style.styleCode}
+                onChange={(e) => handleFieldChange('styleCode', e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-slate-100 font-mono"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[10px] text-slate-400 block mb-1">Buyer / Customer</label>
+              <input
+                type="text"
+                value={style.buyer}
+                onChange={(e) => handleFieldChange('buyer', e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-slate-100"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-slate-400 block mb-1">Category</label>
+              <input
+                type="text"
+                value={style.category}
+                onChange={(e) => handleFieldChange('category', e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-slate-100"
+              />
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-[10px] text-slate-400 block mb-1">Shift Working Hours</label>
               <input
                 type="number"
-                min="6"
-                max="12"
+                min="1"
+                max="16"
                 value={style.workingHours}
                 onChange={(e) => handleFieldChange('workingHours', Math.max(1, parseInt(e.target.value) || 8))}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-slate-100 font-mono"
@@ -168,8 +211,8 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
               <label className="text-[10px] text-slate-400 block mb-1">Total Operators in Line</label>
               <input
                 type="number"
-                min="5"
-                max="100"
+                min="1"
+                max="120"
                 value={style.totalOperators}
                 onChange={(e) => handleFieldChange('totalOperators', Math.max(1, parseInt(e.target.value) || 20))}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-slate-100 font-mono"
@@ -182,7 +225,7 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
               <label className="text-[10px] text-slate-400 block mb-1">Target Steady Efficiency (%)</label>
               <input
                 type="number"
-                min="30"
+                min="10"
                 max="100"
                 value={style.targetEfficiencyPct}
                 onChange={(e) => handleFieldChange('targetEfficiencyPct', Math.max(10, parseInt(e.target.value) || 85))}
@@ -196,7 +239,7 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
                 type="number"
                 step="0.25"
                 value={style.hourlyLaborRate}
-                onChange={(e) => handleFieldChange('hourlyLaborRate', Math.max(0.5, parseFloat(e.target.value) || 3.5))}
+                onChange={(e) => handleFieldChange('hourlyLaborRate', Math.max(0.1, parseFloat(e.target.value) || 3.5))}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-slate-100 font-mono"
               />
             </div>
@@ -208,7 +251,7 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
               type="number"
               step="500"
               value={style.orderQuantity}
-              onChange={(e) => handleFieldChange('orderQuantity', Math.max(100, parseInt(e.target.value) || 10000))}
+              onChange={(e) => handleFieldChange('orderQuantity', Math.max(10, parseInt(e.target.value) || 10000))}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-slate-100 font-mono"
             />
           </div>

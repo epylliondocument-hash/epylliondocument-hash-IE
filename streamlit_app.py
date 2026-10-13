@@ -329,27 +329,30 @@ with tab_ops:
                 st.success(f"Added {add_name}!")
                 st.rerun()
 
-    # Operations table with calculated fields
-    ops_display = []
-    for op in st.session_state.operations:
-        station_time = op["smv"] / max(1, op["assigned"])
-        cap_hr = int((60 / max(0.01, op["smv"])) * op["assigned"] * (target_eff_pct / 100))
-        is_bn = station_time > pitch_time * 1.15
-        
-        ops_display.append({
-            "Seq": op["seq"],
-            "Operation Name": op["name"],
-            "Section": op["section"].upper(),
-            "Machine": op["machine"],
-            "SMV (min)": f"{op['smv']:.2f}",
-            "Assigned Ops": op["assigned"],
-            "Station Cycle (min)": f"{station_time:.2f}",
-            "Capacity / Hr (pcs)": cap_hr,
-            "Status": "⚠️ BOTTLENECK" if is_bn else "✅ BALANCED"
-        })
-
-    df_ops_table = pd.DataFrame(ops_display)
-    st.dataframe(df_ops_table, hide_index=True, use_container_width=True)
+    # Operations table with in-place editable fields (Direct editing without formula lock)
+    st.info("💡 **Spreadsheet Mode Active**: Edit Name, Section, Machine, SMV, Assigned Ops directly in the table below or add new rows at the bottom.")
+    
+    df_raw = pd.DataFrame(st.session_state.operations)
+    if not df_raw.empty:
+        edited_df = st.data_editor(
+            df_raw,
+            num_rows="dynamic",
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "seq": st.column_config.NumberColumn("Seq", min_value=1, step=1, format="%d"),
+                "name": st.column_config.TextColumn("Operation Name", required=True),
+                "section": st.column_config.SelectboxColumn("Section", options=["prep", "assembly", "finishing"], required=True),
+                "machine": st.column_config.SelectboxColumn("Machine", options=["SNLS", "DNLS", "4T-OL", "5T-OL", "FL", "KANSAI", "FOA", "BH", "BA", "BT", "IRON", "MANUAL"], required=True),
+                "smv": st.column_config.NumberColumn("SMV (min)", min_value=0.01, step=0.05, format="%.2f"),
+                "assigned": st.column_config.NumberColumn("Assigned Ops", min_value=1, step=1, format="%d"),
+            },
+            key="ops_editor"
+        )
+        # Synchronize edits back to session state
+        if not edited_df.equals(df_raw):
+            st.session_state.operations = edited_df.to_dict('records')
+            st.rerun()
 
 # -------------------------------------------------------------
 # TAB 3: LINE BALANCING & PITCH DIAGRAM

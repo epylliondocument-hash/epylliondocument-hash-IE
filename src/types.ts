@@ -32,6 +32,14 @@ export interface LadderCurvePreset {
   recommendedFor: string;
 }
 
+export interface CustomLadderDay {
+  dayNumber: number;
+  dayLabel: string;
+  efficiencyPct: number;
+  customTargetPcs?: number; // Manual override without formula
+  customHourlyBreakdown?: number[];
+}
+
 export interface LadderDayPlan {
   dayNumber: number;
   dayLabel: string;
@@ -41,6 +49,7 @@ export interface LadderDayPlan {
   remainingOrderPcs: number;
   hourlyBreakdown: number[]; // 8 or 10 hours
   targetHourlyAverage: number;
+  isManualTarget?: boolean; // Flag if manually set without formula
 }
 
 export interface LineBalancingMetrics {
@@ -75,7 +84,9 @@ export interface GarmentStyle {
   hourlyLaborRate: number; // in USD or local currency
   activeLadderPresetId: string;
   customLadderEfficiencies: number[];
+  customLadderDays?: CustomLadderDay[];
   operations: Operation[];
+  isUserCreated?: boolean;
 }
 
 export type ViewTab = 'ladder' | 'operations' | 'balance' | 'analytics';

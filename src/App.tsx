@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { GarmentStyle, ViewTab, AndroidDeviceMode, Operation } from './types';
-import { PRESET_GARMENT_STYLES, LADDER_PRESETS } from './ladders';
+import { GarmentStyle, ViewTab, AndroidDeviceMode, Operation, CustomLadderDay } from './types';
+import { PRESET_GARMENT_STYLES } from './ladders';
 import { calculateLineMetrics } from './engine';
 import { AndroidFrame } from './components/AndroidFrame';
 import { AndroidTopBar } from './components/AndroidTopBar';
@@ -12,11 +12,26 @@ import { AnalyticsTab } from './components/AnalyticsTab';
 import { TaktStopwatchModal } from './components/TaktStopwatchModal';
 import { PWAInstallDialog } from './components/PWAInstallDialog';
 import { PublishFreeModal } from './components/PublishFreeModal';
+import { NewStyleModal } from './components/NewStyleModal';
+import { EditStyleModal } from './components/EditStyleModal';
 import { usePWAInstall } from './hooks/usePWAInstall';
 
 export default function App() {
+  // Styles list management with local storage persistence
+  const [allStyles, setAllStyles] = useState<GarmentStyle[]>(() => {
+    try {
+      const savedStyles = localStorage.getItem('smv_ladder_all_styles');
+      if (savedStyles) {
+        const parsed = JSON.parse(savedStyles);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {
+      // Fallback
+    }
+    return PRESET_GARMENT_STYLES;
+  });
+
   const [currentStyle, setCurrentStyle] = useState<GarmentStyle>(() => {
-    // Try restoring saved draft if any
     try {
       const saved = localStorage.getItem('smv_ladder_style');
       if (saved) return JSON.parse(saved);
@@ -32,17 +47,20 @@ export default function App() {
   const [stopwatchTargetOpId, setStopwatchTargetOpId] = useState<string | undefined>(undefined);
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
   const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
+  const [isNewStyleModalOpen, setIsNewStyleModalOpen] = useState(false);
+  const [isEditStyleModalOpen, setIsEditStyleModalOpen] = useState(false);
 
   const { isInstallable } = usePWAInstall();
 
-  // Save current style to local storage
+  // Save current style and all styles to local storage
   useEffect(() => {
     try {
       localStorage.setItem('smv_ladder_style', JSON.stringify(currentStyle));
+      localStorage.setItem('smv_ladder_all_styles', JSON.stringify(allStyles));
     } catch {
       // Ignore
     }
-  }, [currentStyle]);
+  }, [currentStyle, allStyles]);
 
   // If on actual mobile device screen, auto switch to full screen
   useEffect(() => {
@@ -53,19 +71,39 @@ export default function App() {
 
   const metrics = calculateLineMetrics(currentStyle);
 
-  const handleUpdateOperations = (newOps: Operation[]) => {
-    setCurrentStyle((prev) => ({
-      ...prev,
-      operations: newOps,
-    }));
+  const handleUpdateCurrentStyle = (updated: GarmentStyle) => {
+    setCurrentStyle(updated);
+    setAllStyles((prev) =>
+      prev.map((s) => (s.id === updated.id ? updated : s))
+    );
   };
 
-  const handleUpdateEfficiencies = (efficiencies: number[], presetId: string) => {
-    setCurrentStyle((prev) => ({
-      ...prev,
+  const handleUpdateOperations = (newOps: Operation[]) => {
+    handleUpdateCurrentStyle({
+      ...currentStyle,
+      operations: newOps,
+    });
+  };
+
+  const handleUpdateLadder = (days: CustomLadderDay[], efficiencies: number[], presetId: string) => {
+    handleUpdateCurrentStyle({
+      ...currentStyle,
       activeLadderPresetId: presetId,
       customLadderEfficiencies: efficiencies,
-    }));
+      customLadderDays: days,
+    });
+  };
+
+  const handleCreateNewStyle = (newStyle: GarmentStyle) => {
+    setAllStyles((prev) => [newStyle, ...prev]);
+    setCurrentStyle(newStyle);
+  };
+
+  const handleDeleteStyle = (styleId: string) => {
+    const remaining = allStyles.filter((s) => s.id !== styleId);
+    const fallback = remaining.length > 0 ? remaining[0] : PRESET_GARMENT_STYLES[0];
+    setAllStyles(remaining.length > 0 ? remaining : PRESET_GARMENT_STYLES);
+    setCurrentStyle(fallback);
   };
 
   const handleOpenTimeStudy = (opId?: string) => {
@@ -74,23 +112,16 @@ export default function App() {
   };
 
   const handleApplyStopwatchSMV = (opId: string, measuredSMV: number) => {
-    setCurrentStyle((prev) => {
-      const updatedOps = prev.operations.map((op) => {
-        if (op.id === opId) {
-          const cap = Math.round((60 / measuredSMV) * op.operatorAssigned * (prev.targetEfficiencyPct / 100));
-          return {
-            ...op,
-            smv: measuredSMV,
-            targetCapacityPerHour: cap,
-          };
-        }
-        return op;
-      });
-      return {
-        ...prev,
-        operations: updatedOps,
-      };
+    const updatedOps = currentStyle.operations.map((op) => {
+      if (op.id === opId) {
+        return {
+          ...op,
+          smv: measuredSMV,
+        };
+      }
+      return op;
     });
+    handleUpdateOperations(updatedOps);
   };
 
   return (
@@ -102,7 +133,10 @@ export default function App() {
         {/* Android Material 3 Top App Bar */}
         <AndroidTopBar
           currentStyle={currentStyle}
-          onSelectStyle={setCurrentStyle}
+          allStyles={allStyles}
+          onSelectStyle={(s) => setCurrentStyle(s)}
+          onOpenNewStyleModal={() => setIsNewStyleModalOpen(true)}
+          onOpenEditStyleModal={() => setIsEditStyleModalOpen(true)}
           onOpenStopwatch={() => handleOpenTimeStudy()}
           onOpenInstallModal={() => setIsInstallModalOpen(true)}
           onOpenPublishModal={() => setIsPublishModalOpen(true)}
@@ -115,7 +149,7 @@ export default function App() {
             <LadderPlanTab
               style={currentStyle}
               metrics={metrics}
-              onUpdateEfficiencies={handleUpdateEfficiencies}
+              onUpdateLadder={handleUpdateLadder}
             />
           )}
 
@@ -132,7 +166,7 @@ export default function App() {
             <LineBalanceTab
               style={currentStyle}
               metrics={metrics}
-              onUpdateStyle={setCurrentStyle}
+              onUpdateStyle={handleUpdateCurrentStyle}
             />
           )}
 
@@ -140,7 +174,7 @@ export default function App() {
             <AnalyticsTab
               style={currentStyle}
               metrics={metrics}
-              onUpdateStyle={setCurrentStyle}
+              onUpdateStyle={handleUpdateCurrentStyle}
             />
           )}
         </main>
@@ -151,6 +185,25 @@ export default function App() {
           onTabChange={setActiveTab}
           bottleneckCount={metrics.bottleneckCount}
         />
+
+        {/* Create New Garment Style Entry Modal */}
+        {isNewStyleModalOpen && (
+          <NewStyleModal
+            currentStyle={currentStyle}
+            onClose={() => setIsNewStyleModalOpen(false)}
+            onCreateStyle={handleCreateNewStyle}
+          />
+        )}
+
+        {/* Edit Style Info & Parameters Modal */}
+        {isEditStyleModalOpen && (
+          <EditStyleModal
+            style={currentStyle}
+            onClose={() => setIsEditStyleModalOpen(false)}
+            onSaveStyle={handleUpdateCurrentStyle}
+            onDeleteStyle={handleDeleteStyle}
+          />
+        )}
 
         {/* Takt Time Study Modal */}
         {isStopwatchOpen && (

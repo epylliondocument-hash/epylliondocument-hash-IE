@@ -1,4 +1,4 @@
-import { GarmentStyle, LadderDayPlan, LineBalancingMetrics, Operation } from './types';
+import { CustomLadderDay, GarmentStyle, LadderDayPlan, LineBalancingMetrics, Operation } from './types';
 
 /**
  * Standard industrial engineering human shift production weight distribution.
@@ -19,7 +19,7 @@ export function calculateLineMetrics(style: GarmentStyle): LineBalancingMetrics 
   const targetEff = Math.max(10, Math.min(100, style.targetEfficiencyPct));
 
   // Pitch Time = Total Garment SMV / Total Assigned Operators
-  const pitchTimeMinutes = Number((totalSMV / totalOps).toFixed(2));
+  const pitchTimeMinutes = Number((totalOps > 0 ? totalSMV / totalOps : 0).toFixed(2));
 
   // Target output per hour = (Operators * 60 * (Efficiency / 100)) / Total SMV
   const targetPiecesPerHour = totalSMV > 0
@@ -39,9 +39,11 @@ export function calculateLineMetrics(style: GarmentStyle): LineBalancingMetrics 
       maxStationSMV = stationSMV;
     }
 
-    // Flag as bottleneck if station SMV is more than 15% above pitch time
+    // Flag as bottleneck if station SMV is more than 12% above pitch time
     // or if its capacity per hour is below target pieces per hour
-    const capacityPerHour = Math.round((60 / Math.max(0.01, op.smv)) * assigned * (targetEff / 100));
+    const capacityPerHour = op.targetCapacityPerHour > 0
+      ? op.targetCapacityPerHour
+      : Math.round((60 / Math.max(0.01, op.smv)) * assigned * (targetEff / 100));
     const isBottleneck = stationSMV > pitchTimeMinutes * 1.12 || (capacityPerHour < targetPiecesPerHour * 0.95);
     
     if (isBottleneck) {
@@ -90,34 +92,61 @@ export function calculateLineMetrics(style: GarmentStyle): LineBalancingMetrics 
 
 /**
  * Calculates day-by-day Ramp-Up Learning Curve Ladder targets and hourly outputs.
+ * Allows user-defined manual targets WITHOUT formula, or falls back to IE ramp formula.
  */
 export function calculateLadderPlan(
   style: GarmentStyle,
-  efficiencies: number[]
+  efficiencies: number[],
+  customDays?: CustomLadderDay[]
 ): LadderDayPlan[] {
   const totalSMV = style.operations.reduce((sum, op) => sum + (Number(op.smv) || 0), 0);
-  if (totalSMV <= 0) return [];
+  const totalOps = Math.max(1, style.totalOperators);
+  const workingHours = Math.max(1, style.workingHours);
+
+  // Use customDays if passed, or from style, or build from efficiencies
+  const daysList: CustomLadderDay[] = (customDays && customDays.length > 0)
+    ? customDays
+    : (style.customLadderDays && style.customLadderDays.length > 0)
+    ? style.customLadderDays
+    : efficiencies.map((eff, index) => ({
+        dayNumber: index + 1,
+        dayLabel: `Day ${index + 1}`,
+        efficiencyPct: eff,
+      }));
 
   const plans: LadderDayPlan[] = [];
   let runningCumulative = 0;
 
-  efficiencies.forEach((eff, index) => {
-    const dayNumber = index + 1;
+  daysList.forEach((day, index) => {
+    const dayNumber = day.dayNumber || index + 1;
+    const dayLabel = day.dayLabel || `Day ${dayNumber}`;
+    const eff = day.efficiencyPct ?? (efficiencies[index] ?? 50);
     const effRatio = eff / 100;
 
-    // Daily target = (Hours * 60 * Operators * Efficiency) / Total SMV
-    const rawTarget = (style.workingHours * 60 * style.totalOperators * effRatio) / totalSMV;
-    const targetDailyPcs = Math.round(rawTarget);
-    runningCumulative += targetDailyPcs;
+    let targetDailyPcs: number;
+    let isManualTarget = false;
 
+    // WITHOUT FORMULA: If user explicitly entered customTargetPcs, use it directly!
+    if (typeof day.customTargetPcs === 'number' && !isNaN(day.customTargetPcs) && day.customTargetPcs >= 0) {
+      targetDailyPcs = Math.round(day.customTargetPcs);
+      isManualTarget = true;
+    } else {
+      // IE Formula: (Hours * 60 * Operators * Efficiency) / Total SMV
+      const rawTarget = totalSMV > 0
+        ? (workingHours * 60 * totalOps * effRatio) / totalSMV
+        : 0;
+      targetDailyPcs = Math.round(rawTarget);
+    }
+
+    runningCumulative += targetDailyPcs;
     const remainingOrderPcs = Math.max(0, style.orderQuantity - runningCumulative);
-    const hourlyAverage = targetDailyPcs / style.workingHours;
+    const hourlyAverage = workingHours > 0 ? targetDailyPcs / workingHours : 0;
 
     // Distribute across shift hours using IE ergonomic curve
     const hourlyBreakdown: number[] = [];
     let sumAssigned = 0;
 
-    for (let h = 0; h < style.workingHours; h++) {
+    for (let h = 0; h < workingHours; h++) {
       const weightIndex = h % HOURLY_SHIFT_WEIGHTS_8HR.length;
       const weight = HOURLY_SHIFT_WEIGHTS_8HR[weightIndex];
       const hourTarget = Math.round(hourlyAverage * weight);
@@ -133,17 +162,48 @@ export function calculateLadderPlan(
 
     plans.push({
       dayNumber,
-      dayLabel: `Day ${dayNumber}`,
+      dayLabel,
       efficiencyPct: eff,
       targetDailyPcs,
       cumulativeTargetPcs: runningCumulative,
       remainingOrderPcs,
       hourlyBreakdown,
       targetHourlyAverage: Math.round(hourlyAverage),
+      isManualTarget,
     });
   });
 
   return plans;
+}
+
+/**
+ * Formula utility: Recalculates all operation capacities and theoretical operators
+ * from textbook IE formulas when user explicitly chooses to auto-calculate.
+ */
+export function recalculateOperationsWithFormula(
+  operations: Operation[],
+  totalOperators: number,
+  targetEfficiencyPct: number
+): Operation[] {
+  const totalSMV = operations.reduce((sum, op) => sum + (Number(op.smv) || 0), 0);
+  const pitchTimeMinutes = totalSMV > 0 && totalOperators > 0 ? totalSMV / totalOperators : 1.0;
+  const effRatio = targetEfficiencyPct / 100;
+
+  return operations.map((op) => {
+    const smv = Math.max(0.01, op.smv);
+    const assigned = Math.max(1, op.operatorAssigned);
+    const theoretical = Number(((smv / pitchTimeMinutes)).toFixed(2));
+    const capacity = Math.round((60 / smv) * assigned * effRatio);
+    const stationCycle = smv / assigned;
+    const isBottleneck = stationCycle > pitchTimeMinutes * 1.15;
+
+    return {
+      ...op,
+      theoreticalOperators: theoretical,
+      targetCapacityPerHour: capacity,
+      isBottleneck,
+    };
+  });
 }
 
 /**

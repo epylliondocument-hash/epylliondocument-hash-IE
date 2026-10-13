@@ -18,7 +18,7 @@ export async function exportLadderPlanPDF(
     });
 
     const metrics = calculateLineMetrics(style);
-    const ladderPlans = calculateLadderPlan(style, efficiencies);
+    const ladderPlans = calculateLadderPlan(style, efficiencies, style.customLadderDays);
 
     const pageWidth = doc.internal.pageSize.getWidth();
     const margin = 14;
