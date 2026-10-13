@@ -1,0 +1,8 @@
+{
+  "name": "Remix DroidHub",
+  "description": "Discover, manage, and explore the best Android applications tailored to your daily needs.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
